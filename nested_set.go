@@ -61,11 +61,31 @@ func parseNode(db *gorm.DB, source interface{}) (tx *gorm.DB, item nestedItem, e
 
 		switch t.Tag.Get("nestedset") {
 		case "id":
-			item.ID = v.Int()
+			item.ID = intValue(v)
 			item.DbNames["id"] = dbName
 			break
 		case "parent_id":
-			item.ParentID = v.Interface().(sql.NullInt64)
+			switch x := v.Interface().(type) {
+			case uint:
+				item.ParentID = sql.NullInt64{Int64: int64(x), Valid: true}
+			case uint64:
+				item.ParentID = sql.NullInt64{Int64: int64(x), Valid: true}
+			case int:
+				item.ParentID = sql.NullInt64{Int64: int64(x), Valid: true}
+			case int64:
+				item.ParentID = sql.NullInt64{Int64: int64(x), Valid: true}
+			case sql.NullInt64:
+				item.ParentID = x
+			case *uint:
+				if x == nil {
+					item.ParentID = sql.NullInt64{Valid: false}
+				} else {
+					item.ParentID = sql.NullInt64{Int64: int64(*x), Valid: true}
+				}
+			default:
+				err = fmt.Errorf("invalid parent_id type %v, must int, uint, nullInt64", source)
+				return
+			}
 			item.DbNames["parent_id"] = dbName
 			break
 		case "depth":
@@ -372,4 +392,15 @@ func formatSQL(placeHolderSQL string, node nestedItem) (out string) {
 	}
 
 	return
+}
+
+func intValue(val reflect.Value) int64 {
+	switch val.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return val.Int()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return int64(val.Uint())
+	default:
+		panic("unsupported type, is not int or uint")
+	}
 }
