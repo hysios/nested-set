@@ -96,7 +96,8 @@ func TestCreateSource(t *testing.T) {
 	initData()
 
 	c1 := Category{Title: "c1s"}
-	Create(db, &c1, nil)
+	var cNil *Category
+	Create(db, &c1, cNil)
 	assert.Equal(t, c1.Lft, 1)
 	assert.Equal(t, c1.Rgt, 2)
 	assert.Equal(t, c1.Depth, 0)
@@ -184,6 +185,163 @@ func TestMoveToRight(t *testing.T) {
 	assertNodeEqual(t, suits, 15, 20, 2, 2, womens.ID)
 	assertNodeEqual(t, slacks, 16, 17, 3, 0, suits.ID)
 	assertNodeEqual(t, jackets, 18, 19, 3, 0, suits.ID)
+}
+
+func TestRebuild(t *testing.T) {
+	initData()
+	affectedCount, err := Rebuild(db, clothing, true)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, affectedCount)
+	reloadCategories()
+
+	assertNodeEqual(t, clothing, 1, 22, 0, 2, 0)
+	assertNodeEqual(t, mens, 2, 9, 1, 1, clothing.ID)
+	assertNodeEqual(t, suits, 3, 8, 2, 2, mens.ID)
+	assertNodeEqual(t, slacks, 4, 5, 3, 0, suits.ID)
+	assertNodeEqual(t, jackets, 6, 7, 3, 0, suits.ID)
+	assertNodeEqual(t, womens, 10, 21, 1, 3, clothing.ID)
+	assertNodeEqual(t, dresses, 11, 16, 2, 2, womens.ID)
+	assertNodeEqual(t, eveningGowns, 12, 13, 3, 0, dresses.ID)
+	assertNodeEqual(t, sunDresses, 14, 15, 3, 0, dresses.ID)
+	assertNodeEqual(t, skirts, 17, 18, 2, 0, womens.ID)
+	assertNodeEqual(t, blouses, 19, 20, 2, 0, womens.ID)
+
+	sunDresses.Rgt = 123
+	sunDresses.Lft = 12
+	sunDresses.Depth = 1
+	sunDresses.ChildrenCount = 100
+	err = db.Updates(&sunDresses).Error
+	assert.NoError(t, err)
+	reloadCategories()
+	assertNodeEqual(t, sunDresses, 12, 123, 1, 100, dresses.ID)
+
+	affectedCount, err = Rebuild(db, clothing, true)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, affectedCount)
+	reloadCategories()
+
+	assertNodeEqual(t, clothing, 1, 22, 0, 2, 0)
+	assertNodeEqual(t, mens, 2, 9, 1, 1, clothing.ID)
+	assertNodeEqual(t, suits, 3, 8, 2, 2, mens.ID)
+	assertNodeEqual(t, slacks, 4, 5, 3, 0, suits.ID)
+	assertNodeEqual(t, jackets, 6, 7, 3, 0, suits.ID)
+	assertNodeEqual(t, womens, 10, 21, 1, 3, clothing.ID)
+	assertNodeEqual(t, dresses, 11, 16, 2, 2, womens.ID)
+	assertNodeEqual(t, eveningGowns, 14, 15, 3, 0, dresses.ID)
+	assertNodeEqual(t, sunDresses, 12, 13, 3, 0, dresses.ID)
+	assertNodeEqual(t, skirts, 17, 18, 2, 0, womens.ID)
+	assertNodeEqual(t, blouses, 19, 20, 2, 0, womens.ID)
+
+	affectedCount, err = Rebuild(db, clothing, true)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, affectedCount)
+	reloadCategories()
+
+	assertNodeEqual(t, clothing, 1, 22, 0, 2, 0)
+	assertNodeEqual(t, mens, 2, 9, 1, 1, clothing.ID)
+	assertNodeEqual(t, suits, 3, 8, 2, 2, mens.ID)
+	assertNodeEqual(t, slacks, 4, 5, 3, 0, suits.ID)
+	assertNodeEqual(t, jackets, 6, 7, 3, 0, suits.ID)
+	assertNodeEqual(t, womens, 10, 21, 1, 3, clothing.ID)
+	assertNodeEqual(t, dresses, 11, 16, 2, 2, womens.ID)
+	assertNodeEqual(t, eveningGowns, 14, 15, 3, 0, dresses.ID)
+	assertNodeEqual(t, sunDresses, 12, 13, 3, 0, dresses.ID)
+	assertNodeEqual(t, skirts, 17, 18, 2, 0, womens.ID)
+	assertNodeEqual(t, blouses, 19, 20, 2, 0, womens.ID)
+
+	hat := *CategoryFactory.MustCreateWithOption(map[string]interface{}{
+		"Title":    "Hat",
+		"ParentID": sql.NullInt64{Valid: false},
+	}).(*Category)
+
+	affectedCount, err = Rebuild(db, clothing, false)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, affectedCount)
+
+	affectedCount, err = Rebuild(db, clothing, true)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, affectedCount)
+	reloadCategories()
+	hat, _ = findNode(db, hat.ID)
+
+	assertNodeEqual(t, clothing, 1, 22, 0, 2, 0)
+	assertNodeEqual(t, mens, 2, 9, 1, 1, clothing.ID)
+	assertNodeEqual(t, suits, 3, 8, 2, 2, mens.ID)
+	assertNodeEqual(t, slacks, 4, 5, 3, 0, suits.ID)
+	assertNodeEqual(t, jackets, 6, 7, 3, 0, suits.ID)
+	assertNodeEqual(t, womens, 10, 21, 1, 3, clothing.ID)
+	assertNodeEqual(t, dresses, 11, 16, 2, 2, womens.ID)
+	assertNodeEqual(t, eveningGowns, 14, 15, 3, 0, dresses.ID)
+	assertNodeEqual(t, sunDresses, 12, 13, 3, 0, dresses.ID)
+	assertNodeEqual(t, skirts, 17, 18, 2, 0, womens.ID)
+	assertNodeEqual(t, blouses, 19, 20, 2, 0, womens.ID)
+	assertNodeEqual(t, hat, 23, 24, 0, 0, 0)
+
+	jacksClothing := *CategoryFactory.MustCreateWithOption(map[string]interface{}{
+		"Title":    "Jack's Clothing",
+		"ParentID": sql.NullInt64{Valid: false},
+		"UserType": "User",
+		"UserID":   8686,
+	}).(*Category)
+	jacksSuits := *CategoryFactory.MustCreateWithOption(map[string]interface{}{
+		"Title":    "Jack's Suits",
+		"ParentID": sql.NullInt64{Valid: true, Int64: jacksClothing.ID},
+		"UserType": "User",
+		"UserID":   8686,
+	}).(*Category)
+	jacksHat := *CategoryFactory.MustCreateWithOption(map[string]interface{}{
+		"Title":    "Jack's Hat",
+		"UserType": "User",
+		"UserID":   8686,
+		"ParentID": sql.NullInt64{Valid: false},
+	}).(*Category)
+	jacksSlacks := *CategoryFactory.MustCreateWithOption(map[string]interface{}{
+		"Title":    "Jack's Slacks",
+		"ParentID": sql.NullInt64{Valid: true, Int64: jacksClothing.ID},
+		"UserType": "User",
+		"UserID":   8686,
+	}).(*Category)
+
+	lilysHat := *CategoryFactory.MustCreateWithOption(map[string]interface{}{
+		"Title":    "Lily's Hat",
+		"UserType": "User",
+		"UserID":   6666,
+		"ParentID": sql.NullInt64{Valid: false},
+	}).(*Category)
+	lilysClothing := *CategoryFactory.MustCreateWithOption(map[string]interface{}{
+		"Title":    "Lily's Clothing",
+		"ParentID": sql.NullInt64{Valid: false},
+		"UserType": "User",
+		"UserID":   6666,
+	}).(*Category)
+	lilysDresses := *CategoryFactory.MustCreateWithOption(map[string]interface{}{
+		"Title":    "Lily's Dresses",
+		"ParentID": sql.NullInt64{Valid: true, Int64: lilysClothing.ID},
+		"UserType": "User",
+		"UserID":   6666,
+	}).(*Category)
+
+	affectedCount, err = Rebuild(db, jacksSuits, true)
+	assert.NoError(t, err)
+	assert.Equal(t, 4, affectedCount)
+	affectedCount, err = Rebuild(db, lilysHat, true)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, affectedCount)
+	jacksClothing, _ = findNode(db, jacksClothing.ID)
+	jacksSuits, _ = findNode(db, jacksSuits.ID)
+	jacksSlacks, _ = findNode(db, jacksSlacks.ID)
+	jacksHat, _ = findNode(db, jacksHat.ID)
+	lilysHat, _ = findNode(db, lilysHat.ID)
+	lilysClothing, _ = findNode(db, lilysClothing.ID)
+	lilysDresses, _ = findNode(db, lilysDresses.ID)
+
+	assertNodeEqual(t, jacksClothing, 1, 6, 0, 2, 0)
+	assertNodeEqual(t, jacksSuits, 2, 3, 1, 0, jacksClothing.ID)
+	assertNodeEqual(t, jacksSlacks, 4, 5, 1, 0, jacksClothing.ID)
+	assertNodeEqual(t, jacksHat, 7, 8, 0, 0, 0)
+	assertNodeEqual(t, lilysHat, 1, 2, 0, 0, 0)
+	assertNodeEqual(t, lilysClothing, 3, 6, 0, 1, 0)
+	assertNodeEqual(t, lilysDresses, 4, 5, 1, 0, lilysClothing.ID)
 }
 
 func TestMoveToLeft(t *testing.T) {
@@ -281,9 +439,9 @@ func assertNodeEqual(t *testing.T, target Category, left, right, depth, children
 	if parentID > 0 {
 		nullInt64ParentID = sql.NullInt64{Valid: true, Int64: parentID}
 	}
-	assert.Equal(t, target.Lft, left)
-	assert.Equal(t, target.Rgt, right)
-	assert.Equal(t, target.Depth, depth)
-	assert.Equal(t, target.ChildrenCount, childrenCount)
-	assert.Equal(t, target.ParentID, nullInt64ParentID)
+	assert.Equal(t, left, target.Lft)
+	assert.Equal(t, right, target.Rgt)
+	assert.Equal(t, depth, target.Depth)
+	assert.Equal(t, childrenCount, target.ChildrenCount)
+	assert.Equal(t, nullInt64ParentID, target.ParentID)
 }
