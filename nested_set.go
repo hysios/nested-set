@@ -210,7 +210,12 @@ func Delete(db *gorm.DB, source interface{}) error {
 		f := t.Field(i)
 		if f.Tag.Get("nestedset") == "id" {
 			f := v.FieldByName(f.Name)
-			f.SetInt(0)
+			switch f.Kind() {
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				f.SetInt(0)
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				f.SetUint(0)
+			}
 			break
 		}
 	}
