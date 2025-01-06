@@ -70,7 +70,7 @@ func parseNode(db *gorm.DB, source interface{}) (tx *gorm.DB, item nestedItem, e
 
 		schemaField := scm.LookUpField(t.Name)
 		if schemaField == nil {
-		    continue;
+			continue
 		}
 		dbName := schemaField.DBName
 
@@ -317,7 +317,7 @@ func Rebuild(db *gorm.DB, source interface{}, doUpdate bool) (affectedCount int,
 		allItems := []*nestedItem{}
 		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where(formatSQL("", target)).
-			Order(formatSQL(":parent_id ASC NULLS FIRST, :lft ASC", target)).
+			Order(formatSQL(":parent_id IS NULL, :parent_id ASC, :lft ASC", target)).
 			Find(&allItems).
 			Error
 
